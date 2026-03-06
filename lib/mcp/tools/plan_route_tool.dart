@@ -9,9 +9,12 @@ import 'mcp_tool.dart';
 final _log = Logger('PlanRouteTool');
 
 class PlanRouteTool implements McpTool {
-  PlanRouteTool(this._trafiklab);
+  PlanRouteTool(this._trafiklab, {this.onRoutes});
 
   final TrafiklabService _trafiklab;
+  /// Called with the full TransitRoute objects (with coordinates) before
+  /// they are stripped down for the AI response.
+  final void Function(List<TransitRoute> routes)? onRoutes;
 
   @override
   String get name => 'PlanRoute';
@@ -104,6 +107,8 @@ class PlanRouteTool implements McpTool {
     }
 
     final top3 = routes.take(3).toList();
+    // Cache full objects (with real coordinates) BEFORE stripping for AI
+    onRoutes?.call(top3);
     return {
       'routes': top3.asMap().entries.map((e) {
         final r = e.value;

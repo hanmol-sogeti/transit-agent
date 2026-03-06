@@ -34,6 +34,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // ── Min profil ───────────────────────────────────────────────
+          _SectionHeader(title: 'Min profil'),
+          const _ProfileForm(),
+          const Gap(20),
+
           // ── Om appen ─────────────────────────────────────────────────
           _SectionHeader(title: 'Om ReseAgenten'),
           _InfoCard(children: [
@@ -293,6 +298,137 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Profilformul\u00e4r ─────────────────────────────────────────────────────────
+
+class _ProfileForm extends ConsumerStatefulWidget {
+  const _ProfileForm();
+
+  @override
+  ConsumerState<_ProfileForm> createState() => _ProfileFormState();
+}
+
+class _ProfileFormState extends ConsumerState<_ProfileForm> {
+  late TextEditingController _nameCtrl;
+  late TextEditingController _addressCtrl;
+  bool _saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final profile = ref.read(userProfileProvider);
+    _nameCtrl = TextEditingController(text: profile.name);
+    _addressCtrl = TextEditingController(text: profile.homeAddress);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _addressCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final updated = UserProfile(
+      name: _nameCtrl.text.trim(),
+      homeAddress: _addressCtrl.text.trim(),
+    );
+    await ref.read(userProfileProvider.notifier).save(updated);
+    if (mounted) {
+      setState(() => _saved = true);
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) { setState(() => _saved = false); }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.person_outline_rounded,
+                    color: AppTheme.brandBlue, size: 18),
+                const Gap(8),
+                Text(
+                  'Personuppgifter',
+                  style: theme.textTheme.labelLarge,
+                ),
+              ],
+            ),
+            const Gap(4),
+            Text(
+              'Anv\u00e4nds av ReseAgenten som standard-startpunkt och '
+              'f\u00f6r personliga h\u00e4lsningar.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
+            const Gap(14),
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Ditt namn',
+                hintText: 'T.ex. Jon Doe',
+                prefixIcon:
+                    Icon(Icons.badge_outlined, size: 18),
+                isDense: true,
+              ),
+            ),
+            const Gap(12),
+            TextField(
+              controller: _addressCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Hemadress',
+                hintText: 'T.ex. Dragabrunsgatan 45, Uppsala',
+                prefixIcon:
+                    Icon(Icons.home_outlined, size: 18),
+                isDense: true,
+              ),
+            ),
+            const Gap(14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: _saved
+                      ? Row(
+                          key: const ValueKey('saved'),
+                          children: [
+                            const Icon(Icons.check_circle_rounded,
+                                color: AppTheme.successColor, size: 16),
+                            const Gap(4),
+                            Text(
+                              'Sparat!',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.successColor,
+                              ),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(key: ValueKey('empty')),
+                ),
+                const Gap(12),
+                FilledButton(
+                  onPressed: _save,
+                  child: const Text('Spara profil'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

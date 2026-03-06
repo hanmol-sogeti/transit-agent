@@ -1,10 +1,60 @@
 /// Kärnmodeller för ReseAgenten
 library;
 
+import 'dart:convert';
 import 'package:latlong2/latlong.dart';
 
-// ─── Stop ────────────────────────────────────────────────────────────────────
+// ─── UserProfile ─────────────────────────────────────────────────────────────
 
+class UserProfile {
+  const UserProfile({
+    this.name = '',
+    this.homeAddress = '',
+    this.homeStopId,
+  });
+
+  final String name;
+  final String homeAddress;
+  final String? homeStopId;
+
+  bool get hasProfile => name.isNotEmpty || homeAddress.isNotEmpty;
+
+  UserProfile copyWith({
+    String? name,
+    String? homeAddress,
+    String? homeStopId,
+  }) =>
+      UserProfile(
+        name: name ?? this.name,
+        homeAddress: homeAddress ?? this.homeAddress,
+        homeStopId: homeStopId ?? this.homeStopId,
+      );
+
+  static UserProfile fromJson(Map<String, dynamic> json) => UserProfile(
+        name: json['name'] as String? ?? '',
+        homeAddress: json['homeAddress'] as String? ?? '',
+        homeStopId: json['homeStopId'] as String?,
+      );
+
+  static UserProfile fromJsonString(String s) {
+    try {
+      return UserProfile.fromJson(
+          jsonDecode(s) as Map<String, dynamic>);
+    } catch (_) {
+      return const UserProfile();
+    }
+  }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'homeAddress': homeAddress,
+        if (homeStopId != null) 'homeStopId': homeStopId,
+      };
+
+  String toJsonString() => jsonEncode(toJson());
+}
+
+// ─── Stop ────────────────────────────────────────────────────────────────────
 class Stop {
   const Stop({
     required this.id,
@@ -257,6 +307,8 @@ class ChatMessage {
     this.toolCalls = const [],
     this.isLoading = false,
     this.errorMessage,
+    this.routes,
+    this.suggestions,
   });
 
   final String id;
@@ -266,12 +318,17 @@ class ChatMessage {
   final List<McpToolCall> toolCalls;
   final bool isLoading;
   final String? errorMessage;
+  final List<TransitRoute>? routes;
+  /// AI-generated or fallback follow-up action chips.
+  final List<String>? suggestions;
 
   ChatMessage copyWith({
     String? content,
     bool? isLoading,
     String? errorMessage,
     List<McpToolCall>? toolCalls,
+    List<TransitRoute>? routes,
+    List<String>? suggestions,
   }) =>
       ChatMessage(
         id: id,
@@ -281,6 +338,8 @@ class ChatMessage {
         toolCalls: toolCalls ?? this.toolCalls,
         isLoading: isLoading ?? this.isLoading,
         errorMessage: errorMessage ?? this.errorMessage,
+        routes: routes ?? this.routes,
+        suggestions: suggestions ?? this.suggestions,
       );
 }
 

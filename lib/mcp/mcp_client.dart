@@ -6,7 +6,6 @@
 library;
 
 import 'dart:convert';
-import 'package:latlong2/latlong.dart';
 import 'package:logging/logging.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
@@ -24,16 +23,50 @@ import 'tools/config_tool.dart';
 
 final _log = Logger('McpClient');
 
-/// Systemmeddelande på svenska – styr assistentens beteende.
-const _systemPrompt = '''
+/// Bygg systemmeddelande — inkluderar användarprofil om tillgänglig.
+String _buildSystemPrompt(UserProfile? profile) {
+  final userCtx = StringBuffer();
+  if (profile != null && profile.hasProfile) {
+    if (profile.name.isNotEmpty) {
+      userCtx.write('Användarens namn är ${profile.name}. ');
+    }
+    if (profile.homeAddress.isNotEmpty) {
+      userCtx.write(
+        'Användarens hemadress är "${profile.homeAddress}". '
+        'VIKTIGT: Om användaren inte explicit anger en startplats för resan, '
+        'använd ALLTID hemadress som startpunkt. Detta gäller alla formuleringar '
+        'såsom: "Jag vill åka till X", "Hur kommer jag till X?", "Planera resa '
+        'till X", "Ta mig till X", "Hur lång tid tar det till X?" – alltså '
+        'ALLTID när en destination nämns utan att en startplats anges. '
+        'Sök automatiskt närmaste hållplats till hemadress via SearchStops. '
+        'Fråga ALDRIG om startplats om hemadress är känd – anta den som standard. ',
+      );
+    }
+  }
+  return '''
 Du är ReseAgenten – en hjälpsam kollektivtrafikassistent för Sverige.
+${userCtx.toString()}
 Du hjälper användare att hitta hållplatser, planera resor, kolla avgångar och boka biljetter.
 Svara alltid på svenska, koncist och vänligt.
 Använd de tillgängliga verktygen för att hämta aktuell data.
 Förklara kortfattat vad du gör (t.ex. "Söker hållplatser nära Flogsta...").
+
+När destination är ett område med flera hållplatser (t.ex. "Flogsta"):
+1. Sök hållplatser i området med SearchStops.
+2. Välj den hållplats som ger kortast restid som slutdestination.
+3. Lista topp 3 alternativa hållplatser i svaret så användaren kan välja.
+
 Vid bokning: visa alltid pris, rutt och avbokningsinfo INNAN du bekräftar.
-Om du inte är säker på orten – fråga användaren om klargörande.
+Om du inte är säker på orten – fråga användaren om klargjörande.
+
+Avsluta ALLTID varje svar med exakt denna rad (sista raden, inget efteråt):
+<!--chips:["Förslag1","Förslag2","Förslag3"]-->
+Välj 2–4 korta, klickbara uppföljningsförslag anpassade till konversationen:
+- Resa planerad: ["Boka resa","Nästa avgång","Visa karta","Annan tid"]
+- Hållplats nämnd: ["Avgångstavla","Planera resa härifrån","Närmaste hållplatser"]
+- Generellt: ["Planera resa","Visa avgångar","Mina bokningar"]
 ''';
+}
 
 class McpClient {
   McpClient({
@@ -44,7 +77,14 @@ class McpClient {
   })  : _openAi = openAi {
     _tools = {
       'SearchStops': SearchStopsTool(trafiklab, location),
-      'PlanRoute': PlanRouteTool(trafiklab),
+      'PlanRoute': PlanRouteTool(
+        trafiklab,
+        onRoutes: (routes) {
+          for (final r in routes) {
+            _routeCache[r.id] = r;
+          }
+        },
+      ),
       'RealtimeDepartures': RealtimeDeparturesTool(trafiklab),
       'BookTicket': BookTicketTool(booking, _resolveRoute),
       'RenderMap': RenderMapTool(_resolveRoute),
@@ -55,6 +95,11 @@ class McpClient {
   final AzureOpenAiService _openAi;
   late final Map<String, McpTool> _tools;
   final _uuid = const Uuid();
+  UserProfile? _userProfile;
+
+  void setUserProfile(UserProfile profile) {
+    _userProfile = profile;
+  }
 
   // Session-scratchpad: hållplatskandidater och ruttkanidater
   final Map<String, TransitRoute> _routeCache = {};
@@ -63,6 +108,28 @@ class McpClient {
 
   List<ChatMessage> get history => List.unmodifiable(_history);
   List<McpToolCall> get toolCallLog => List.unmodifiable(_toolCallLog);
+  List<TransitRoute> get cachedRoutes => _routeCache.values.toList();
+
+  /// Extrahera suggestion-chips från AI-svar och returnera rensat innehåll.
+  static final RegExp _chipsRe =
+      RegExp(r'<!--chips:(\[.*?\])-->', dotAll: false);
+
+  (String, List<String>) _extractChips(String content) {
+    final match = _chipsRe.firstMatch(content);
+    if (match == null) return (content.trimRight(), const []);
+    try {
+      final raw = jsonDecode(match.group(1)!) as List<dynamic>;
+      final chips = raw.cast<String>();
+      final cleaned =
+          content.replaceAll(match.group(0)!, '').trimRight();
+      return (cleaned, chips);
+    } catch (_) {
+      return (
+        content.replaceAll(match.group(0)!, '').trimRight(),
+        const [],
+      );
+    }
+  }
 
   /// Registrera en rutt i cache (anropas av PlanRoute-logiken).
   void cacheRoute(TransitRoute route) {
@@ -90,7 +157,7 @@ class McpClient {
 
     // Bygg OpenAI-meddelanden
     final messages = <OpenAiMessage>[
-      OpenAiMessage.system(_systemPrompt),
+      OpenAiMessage.system(_buildSystemPrompt(_userProfile)),
       ..._history.map(_chatMsgToOpenAi),
     ];
 
@@ -117,6 +184,7 @@ class McpClient {
         finalContent = resp.content ?? '';
         break;
       }
+
 
       // ── Kör verktygen ────────────────────────────────────────────────────
       final toolCallMsgs = <Map<String, dynamic>>[];
@@ -150,10 +218,7 @@ class McpClient {
         } else {
           try {
             result = await tool.execute(tc.arguments);
-            // Om PlanRoute returnerade rutter, cacha dem
-            if (tc.functionName == 'PlanRoute' && result['routes'] != null) {
-              _cacheRoutesFromPlanResult(result, tc.arguments);
-            }
+            // PlanRoute now caches routes itself via onRoutes callback
           } catch (e) {
             error = 'Fel vid körning av ${tc.functionName}: $e';
             result = {'error': error};
@@ -180,12 +245,15 @@ class McpClient {
       }
     }
 
+    final (cleanContent, chips) = _extractChips(
+      finalContent.isNotEmpty
+          ? finalContent
+          : 'Jag kunde inte bearbeta din förfrågan. Försök igen.',
+    );
     final assistantMsg = ChatMessage(
       id: _uuid.v4(),
       role: ChatRole.assistant,
-      content: finalContent.isNotEmpty
-          ? finalContent
-          : 'Jag kunde inte bearbeta din förfrågan. Försök igen.',
+      content: cleanContent,
       timestamp: DateTime.now(),
       toolCalls: _toolCallLog.isNotEmpty
           ? _toolCallLog.sublist(
@@ -193,66 +261,10 @@ class McpClient {
                   ? _toolCallLog.length - 5
                   : 0)
           : [],
+      suggestions: chips.isNotEmpty ? chips : null,
     );
     _history.add(assistantMsg);
     return assistantMsg;
-  }
-
-  void _cacheRoutesFromPlanResult(
-    Map<String, dynamic> result,
-    Map<String, dynamic> args,
-  ) {
-    final routes = result['routes'] as List<dynamic>? ?? [];
-    for (final r in routes) {
-      final rm = r as Map<String, dynamic>;
-      final id = rm['id']?.toString() ?? '';
-      if (id.isNotEmpty && !_routeCache.containsKey(id)) {
-        // Bygg en minimal TransitRoute från JSON-svaret
-        final legs = (rm['legs'] as List<dynamic>? ?? []).map((l) {
-          final lm = l as Map<String, dynamic>;
-          final originStop = Stop(
-            id: '',
-            name: lm['origin']?.toString() ?? '',
-            position: const LatLng(0, 0),
-          );
-          final destStop = Stop(
-            id: '',
-            name: lm['destination']?.toString() ?? '',
-            position: const LatLng(0, 0),
-          );
-          DateTime dep = DateTime.now(), arr = DateTime.now();
-          try { dep = DateTime.parse(lm['departure'].toString()); } catch (_) {}
-          try { arr = DateTime.parse(lm['arrival'].toString()); } catch (_) {}
-          final mode = TransportMode.values.firstWhere(
-            (m) => m.name == lm['mode']?.toString(),
-            orElse: () => TransportMode.unknown,
-          );
-          return Leg(
-            origin: originStop,
-            destination: destStop,
-            departure: dep,
-            arrival: arr,
-            mode: mode,
-            line: lm['line']?.toString(),
-            direction: lm['direction']?.toString(),
-            platform: lm['platform']?.toString(),
-            realtime: lm['realtime'] as bool? ?? false,
-            delayMinutes: lm['delay_minutes'] as int? ?? 0,
-          );
-        }).toList();
-        final durationMin = (rm['duration_minutes'] as num?)?.toInt() ?? 0;
-        final transfers = (rm['transfers'] as num?)?.toInt() ?? 0;
-        final price = (rm['price_sek'] as num?)?.toDouble();
-        final route = TransitRoute(
-          id: id,
-          legs: legs,
-          totalDuration: Duration(minutes: durationMin),
-          transfers: transfers,
-          price: price,
-        );
-        _routeCache[id] = route;
-      }
-    }
   }
 
   OpenAiMessage _chatMsgToOpenAi(ChatMessage msg) {

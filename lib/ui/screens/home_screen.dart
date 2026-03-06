@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../ui/screens/chat_screen.dart';
+import '../../ui/screens/departure_board_screen.dart';
 import '../../ui/screens/settings_screen.dart';
 import '../../ui/widgets/booking_summary.dart';
 import '../../providers/app_providers.dart';
@@ -24,6 +25,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       icon: Icon(Icons.chat_outlined),
       selectedIcon: Icon(Icons.chat_rounded),
       label: Text('Chatt'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.departure_board_outlined),
+      selectedIcon: Icon(Icons.departure_board_rounded),
+      label: Text('Avgångar'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.receipt_long_outlined),
@@ -86,6 +92,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               index: _selectedIndex,
               children: [
                 const ChatScreen(),
+                const DepartureBoardScreen(),
                 _BookingsTab(latestBooking: latestBooking),
                 const SettingsScreen(),
               ],

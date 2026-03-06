@@ -32,6 +32,8 @@ class RouteMapWidget extends ConsumerWidget {
         const LatLng(59.8586, 17.6389); // Uppsala centrum
     final effectiveZoom =
         center != null ? zoom : ref.watch(mapProvider).zoom;
+    final selectedLegIndex =
+        compact ? null : ref.watch(selectedLegIndexProvider);
 
     final tileUrl = EnvConfig.instance.mapTileEndpoint;
     final attribution = EnvConfig.instance.mapAttribution;
@@ -50,10 +52,8 @@ class RouteMapWidget extends ConsumerWidget {
         children: [
           // ── OSM tile layer ────────────────────────────────────────────
           TileLayer(
-            urlTemplate: tileUrl.contains('{s}')
-                ? tileUrl
-                : '$tileUrl/{z}/{x}/{y}.png',
-            subdomains: const ['a', 'b', 'c'],
+            urlTemplate: tileUrl,
+            subdomains: tileUrl.contains('{s}') ? const ['a', 'b', 'c'] : const [],
             userAgentPackageName: 'com.resaagenten.transit_agent',
             retinaMode: false,
           ),
@@ -61,7 +61,8 @@ class RouteMapWidget extends ConsumerWidget {
           // ── Rutt-polylinjer ───────────────────────────────────────────
           if (effectiveRoute != null)
             PolylineLayer(
-              polylines: _buildPolylines(effectiveRoute),
+              polylines:
+                  _buildPolylines(effectiveRoute, selectedLegIndex),
             ),
 
           // ── Markörer ──────────────────────────────────────────────────
@@ -81,19 +82,27 @@ class RouteMapWidget extends ConsumerWidget {
     );
   }
 
-  List<Polyline> _buildPolylines(TransitRoute route) {
+  List<Polyline> _buildPolylines(
+      TransitRoute route, int? selectedLegIndex) {
     final polylines = <Polyline>[];
-    for (final leg in route.legs) {
+    for (var i = 0; i < route.legs.length; i++) {
+      final leg = route.legs[i];
       final points = leg.geometry.isNotEmpty
           ? leg.geometry
           : [leg.origin.position, leg.destination.position];
       final color = AppTheme.modeColor(leg.mode.name);
+      final isHighlighted =
+          selectedLegIndex == null || selectedLegIndex == i;
+      final opacity = isHighlighted ? 1.0 : 0.25;
+      final strokeWidth = isHighlighted
+          ? (leg.mode == TransportMode.walk ? 4.0 : 6.0)
+          : 3.0;
       polylines.add(Polyline(
         points: points,
-        strokeWidth: leg.mode == TransportMode.walk ? 3.0 : 5.0,
+        strokeWidth: strokeWidth,
         color: leg.mode == TransportMode.walk
-            ? color.withValues(alpha: 0.7)
-            : color,
+            ? color.withValues(alpha: 0.7 * opacity)
+            : color.withValues(alpha: opacity),
         pattern: leg.mode == TransportMode.walk
             ? const StrokePattern.dotted()
             : const StrokePattern.solid(),
@@ -142,7 +151,7 @@ class RouteMapWidget extends ConsumerWidget {
       Marker(
         point: pos,
         width: 44,
-        height: 56,
+        height: 80,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

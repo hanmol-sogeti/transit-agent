@@ -59,11 +59,46 @@ final sharedPreferencesProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('Override sharedPreferencesProvider'),
 );
 
-// ─── Chatt-provider ──────────────────────────────────────────────────────────
+// ─── Användarprofil-provider ────────────────────────────────────────────────────────────
+
+class UserProfileNotifier extends Notifier<UserProfile> {
+  @override
+  UserProfile build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final s = prefs.getString('user_profile');
+    if (s == null) {
+      // Demo-standardprofil
+      return const UserProfile(
+        name: 'Jon Doe',
+        homeAddress: 'Dragabrunsgatan 45, Uppsala',
+      );
+    }
+    return UserProfile.fromJsonString(s);
+  }
+
+  Future<void> save(UserProfile profile) async {
+    state = profile;
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setString('user_profile', profile.toJsonString());
+    // Uppdatera systemmeddelandet i MCP-klienten omedelbart
+    ref.read(mcpClientProvider).setUserProfile(profile);
+  }
+}
+
+final userProfileProvider =
+    NotifierProvider<UserProfileNotifier, UserProfile>(UserProfileNotifier.new);
+
 
 class ChatNotifier extends Notifier<List<ChatMessage>> {
   @override
-  List<ChatMessage> build() => [];
+  List<ChatMessage> build() {
+    // Synkronisera användarprofil i MCP-klienten vid init (en gång)
+    // Använd read (inte watch) för att undvika att chatt-historiken raderas
+    // när profilen uppdateras.
+    final profile = ref.read(userProfileProvider);
+    ref.read(mcpClientProvider).setUserProfile(profile);
+    return [];
+  }
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
@@ -79,12 +114,35 @@ class ChatNotifier extends Notifier<List<ChatMessage>> {
     );
     state = [...client.history, loadingMsg];
 
+    // Spara ruttcache-storlek innan anrop för att detektera nya rutter
+    final routesBefore = client.cachedRoutes.map((r) => r.id).toSet();
+
     try {
       await client.sendMessage(text, onToolCall: (call) {
         // Uppdatera UI med verktygskörning
         state = [...client.history, loadingMsg];
       });
       state = List<ChatMessage>.from(client.history);
+
+      // Auto-visa karta och bifoga rutter till assistant-meddelandet
+      final newRoutes = client.cachedRoutes
+          .where((r) => !routesBefore.contains(r.id))
+          .toList();
+      if (newRoutes.isNotEmpty) {
+        // Bifoga rutter till sista assistant-meddelandet för inline-visning
+        final msgs = List<ChatMessage>.from(state);
+        final lastAsstIdx = msgs.lastIndexWhere(
+          (m) => m.role == ChatRole.assistant && !m.isLoading,
+        );
+        if (lastAsstIdx >= 0) {
+          msgs[lastAsstIdx] = msgs[lastAsstIdx].copyWith(routes: newRoutes);
+          state = msgs;
+        }
+        ref.read(latestRoutesProvider.notifier).state = newRoutes;
+        ref.read(selectedLegIndexProvider.notifier).state = null;
+        // Visa karta i sidopanelen också
+        ref.read(mapProvider.notifier).showRoute(newRoutes.first);
+      }
     } catch (e) {
       final msg = e is OpenAiException ? e.message : e.toString();
       final errorMsg = ChatMessage(
@@ -100,12 +158,25 @@ class ChatNotifier extends Notifier<List<ChatMessage>> {
 
   void clearHistory() {
     ref.read(mcpClientProvider).clearHistory();
+    ref.read(latestRoutesProvider.notifier).state = [];
     state = [];
   }
 }
 
 final chatProvider =
     NotifierProvider<ChatNotifier, List<ChatMessage>>(ChatNotifier.new);
+
+// ─── Latest routes provider (from most recent PlanRoute call) ────────────────
+
+final latestRoutesProvider = StateProvider<List<TransitRoute>>(
+  (ref) => [],
+);
+
+// ─── Selected leg index (for map highlight) ──────────────────────────────────
+
+final selectedLegIndexProvider = StateProvider<int?>(
+  (ref) => null,
+);
 
 // ─── Debug-panel provider ────────────────────────────────────────────────────
 

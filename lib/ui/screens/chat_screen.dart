@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/app_providers.dart';
 import '../../ui/theme/app_theme.dart';
 import '../../ui/widgets/chat_bubble.dart';
+import '../../ui/widgets/departure_chips_bar.dart';
 import '../../ui/widgets/map_widget.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -239,24 +241,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       itemCount: messages.length,
       itemBuilder: (ctx, i) {
         final msg = messages[i];
-        return ChatBubble(message: msg);
+        return ChatBubble(message: msg, isLast: i == messages.length - 1);
       },
     );
   }
 
   Widget _buildInputArea(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        border: Border(
-          top: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.15),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DepartureChipsBar(onChipTapped: _sendMessage),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.outline.withValues(alpha: 0.15),
+              ),
+            ),
           ),
-        ),
-      ),
-      child: Row(
+          child: Row(
         children: [
           Expanded(
             child: KeyboardListener(
@@ -316,6 +322,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
+        ),
+      ],
     );
   }
 
@@ -366,7 +374,152 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   child: Text('Ingen rutt vald.'),
                 ),
         ),
+        if (mapState.route != null && mapState.route!.legs.isNotEmpty)
+          _LegDetailsPanel(route: mapState.route!),
       ],
+    );
+  }
+}
+
+/// Horisontell scroller med etappkort under kartan.
+class _LegDetailsPanel extends ConsumerWidget {
+  const _LegDetailsPanel({required this.route});
+  final TransitRoute route;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedIdx = ref.watch(selectedLegIndexProvider);
+    final theme = Theme.of(context);
+
+    return Container(
+      height: 130,
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outline.withValues(alpha: 0.15),
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Text(
+              'Etapper — tryck för att markera',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color:
+                    theme.colorScheme.onSurface.withValues(alpha: 0.45),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              itemCount: route.legs.length,
+              itemBuilder: (ctx, i) {
+                final leg = route.legs[i];
+                final isSelected = selectedIdx == null || selectedIdx == i;
+                final color = AppTheme.modeColor(leg.mode.name);
+                return GestureDetector(
+                  onTap: () {
+                    final notifier =
+                        ref.read(selectedLegIndexProvider.notifier);
+                    notifier.state = notifier.state == i ? null : i;
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 150,
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.1)
+                          : theme.scaffoldBackgroundColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected
+                            ? color.withValues(alpha: 0.5)
+                            : theme.colorScheme.outline
+                                .withValues(alpha: 0.2),
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              AppTheme.modeIcon(leg.mode.name),
+                              size: 14,
+                              color: color,
+                            ),
+                            const SizedBox(width: 4),
+                            if (leg.line != null)
+                              Text(
+                                leg.line!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: color,
+                                ),
+                              ),
+                            if (leg.delayMinutes > 0) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '+${leg.delayMinutes}m',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppTheme.warningColor,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          leg.origin.name,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '→ ${leg.destination.name}',
+                          style: theme.textTheme.bodySmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${DateFormat('HH:mm').format(leg.departure)}–'
+                          '${DateFormat('HH:mm').format(leg.arrival)}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.55),
+                          ),
+                        ),
+                        if (leg.platform != null)
+                          Text(
+                            'Plattform ${leg.platform}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppTheme.brandBlue,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

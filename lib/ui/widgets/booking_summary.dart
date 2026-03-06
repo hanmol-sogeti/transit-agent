@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/models.dart';
 import '../../ui/theme/app_theme.dart';
 
@@ -24,6 +25,7 @@ class BookingSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final isCancelled = booking.status == BookingStatus.cancelled;
 
     return Card(
@@ -135,6 +137,55 @@ class BookingSummaryCard extends StatelessWidget {
                 value: booking.email!,
               ),
             ],
+            const Divider(height: 24),
+
+            // ── QR-biljett ──────────────────────────────────────────────
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    'Din QR-biljett',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color:
+                            AppTheme.brandBlue.withValues(alpha: 0.3),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: QrImageView(
+                      data: 'resaagenten://booking/${booking.reference}',
+                      version: QrVersions.auto,
+                      size: compact ? 96.0 : 130.0,
+                      backgroundColor: Colors.white,
+                      errorCorrectionLevel: QrErrorCorrectLevel.M,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    booking.reference,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      letterSpacing: 1.5,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             const Divider(height: 24),
 
             // ── Avbokning ─────────────────────────────────────────────

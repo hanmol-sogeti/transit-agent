@@ -3,27 +3,34 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../models/models.dart';
 import '../../ui/theme/app_theme.dart';
+import '../../ui/widgets/inline_route_card.dart';
+import '../../ui/widgets/suggestion_chips_row.dart';
 
-class ChatBubble extends StatelessWidget {
-  const ChatBubble({super.key, required this.message});
+class ChatBubble extends ConsumerWidget {
+  const ChatBubble({super.key, required this.message, this.isLast = false});
 
   final ChatMessage message;
+  final bool isLast;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isUser = message.role == ChatRole.user;
     final theme = Theme.of(context);
+    final hasRoutes =
+        message.routes != null && message.routes!.isNotEmpty;
 
-    if (message.isLoading) return _LoadingBubble();
+    if (message.isLoading) { return _LoadingBubble(); }
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
+          maxWidth: MediaQuery.of(context).size.width *
+              (hasRoutes ? 0.90 : 0.75),
         ),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
@@ -58,27 +65,37 @@ class ChatBubble extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: message.errorMessage != null
-                    ? _ErrorContent(message: message)
-                    : MarkdownBody(
-                        data: message.content,
-                        styleSheet: MarkdownStyleSheet.fromTheme(theme)
-                            .copyWith(
-                          p: theme.textTheme.bodyMedium?.copyWith(
-                            color: isUser ? Colors.white : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    message.errorMessage != null
+                        ? _ErrorContent(message: message)
+                        : MarkdownBody(
+                            data: message.content,
+                            styleSheet:
+                                MarkdownStyleSheet.fromTheme(theme).copyWith(
+                              p: theme.textTheme.bodyMedium?.copyWith(
+                                color: isUser ? Colors.white : null,
+                              ),
+                              strong:
+                                  theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: isUser ? Colors.white : null,
+                              ),
+                            ),
                           ),
-                          strong: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: isUser ? Colors.white : null,
-                          ),
-                        ),
-                      ),
+                    // Inline route cards embedded in the bubble
+                    if (hasRoutes && !isUser)
+                      InlineChatRouteCards(routes: message.routes!),
+                  ],
+                ),
               ),
               if (message.toolCalls.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 _ToolCallBadges(toolCalls: message.toolCalls),
-              ],
-            ],
+              ],              // Suggestion chips — only on last assistant message
+              if (isLast && !isUser && !message.isLoading)
+                SuggestionChipsRow(message: message),            ],
           ),
         ),
       ),

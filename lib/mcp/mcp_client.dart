@@ -74,6 +74,7 @@ class McpClient {
     required TrafiklabService trafiklab,
     required LocationService location,
     required BookingService booking,
+    this.onBooking,
   })  : _openAi = openAi {
     _tools = {
       'SearchStops': SearchStopsTool(trafiklab, location),
@@ -86,7 +87,10 @@ class McpClient {
         },
       ),
       'RealtimeDepartures': RealtimeDeparturesTool(trafiklab),
-      'BookTicket': BookTicketTool(booking, _resolveRoute),
+      'BookTicket': BookTicketTool(booking, _resolveRoute, onBooking: (b) {
+        _pendingBooking = b;
+        onBooking?.call(b);
+      }),
       'RenderMap': RenderMapTool(_resolveRoute),
       'Config': ConfigTool(),
     };
@@ -96,6 +100,8 @@ class McpClient {
   late final Map<String, McpTool> _tools;
   final _uuid = const Uuid();
   UserProfile? _userProfile;
+  final void Function(Booking booking)? onBooking;
+  Booking? _pendingBooking;
 
   void setUserProfile(UserProfile profile) {
     _userProfile = profile;
@@ -147,6 +153,7 @@ class McpClient {
     String userText, {
     void Function(McpToolCall call)? onToolCall,
   }) async {
+    _pendingBooking = null;
     final userMsg = ChatMessage(
       id: _uuid.v4(),
       role: ChatRole.user,
@@ -262,7 +269,9 @@ class McpClient {
                   : 0)
           : [],
       suggestions: chips.isNotEmpty ? chips : null,
+      booking: _pendingBooking,
     );
+    _pendingBooking = null;
     _history.add(assistantMsg);
     return assistantMsg;
   }

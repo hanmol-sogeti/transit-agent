@@ -309,6 +309,7 @@ class ChatMessage {
     this.errorMessage,
     this.routes,
     this.suggestions,
+    this.booking,
   });
 
   final String id;
@@ -321,6 +322,8 @@ class ChatMessage {
   final List<TransitRoute>? routes;
   /// AI-generated or fallback follow-up action chips.
   final List<String>? suggestions;
+  /// Confirmed booking attached to this message (shown as inline ticket).
+  final Booking? booking;
 
   ChatMessage copyWith({
     String? content,
@@ -329,6 +332,7 @@ class ChatMessage {
     List<McpToolCall>? toolCalls,
     List<TransitRoute>? routes,
     List<String>? suggestions,
+    Booking? booking,
   }) =>
       ChatMessage(
         id: id,
@@ -340,6 +344,7 @@ class ChatMessage {
         errorMessage: errorMessage ?? this.errorMessage,
         routes: routes ?? this.routes,
         suggestions: suggestions ?? this.suggestions,
+        booking: booking ?? this.booking,
       );
 }
 

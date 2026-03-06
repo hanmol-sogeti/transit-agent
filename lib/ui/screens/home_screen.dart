@@ -170,7 +170,16 @@ class _BookingsTab extends ConsumerWidget {
             onCancel: booking.status.name == 'confirmed'
                 ? () async {
                     try {
-                      await bookingService.cancelLatest();
+                      final cancelled =
+                          await bookingService.cancelLatest();
+                      if (cancelled != null) {
+                        ref
+                            .read(bookingListProvider.notifier)
+                            .replaceByReference(
+                              cancelled.reference,
+                              cancelled,
+                            );
+                      }
                       if (ctx.mounted) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           const SnackBar(

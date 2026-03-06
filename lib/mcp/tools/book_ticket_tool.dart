@@ -9,10 +9,11 @@ import 'mcp_tool.dart';
 final _log = Logger('BookTicketTool');
 
 class BookTicketTool implements McpTool {
-  BookTicketTool(this._booking, this._resolveRoute);
+  BookTicketTool(this._booking, this._resolveRoute, {this.onBooking});
 
   final BookingService _booking;
   final Future<TransitRoute?> Function(String routeId) _resolveRoute;
+  final void Function(Booking booking)? onBooking;
 
   @override
   String get name => 'BookTicket';
@@ -112,6 +113,7 @@ class BookTicketTool implements McpTool {
 
     try {
       final booking = await _booking.book(request);
+      onBooking?.call(booking);
       return {
         'reference': booking.reference,
         'status': booking.status.name,

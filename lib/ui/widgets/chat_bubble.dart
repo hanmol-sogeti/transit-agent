@@ -9,6 +9,7 @@ import '../../models/models.dart';
 import '../../ui/theme/app_theme.dart';
 import '../../ui/widgets/inline_route_card.dart';
 import '../../ui/widgets/suggestion_chips_row.dart';
+import '../../ui/widgets/booking_summary.dart';
 
 class ChatBubble extends ConsumerWidget {
   const ChatBubble({super.key, required this.message, this.isLast = false});
@@ -87,6 +88,15 @@ class ChatBubble extends ConsumerWidget {
                     // Inline route cards embedded in the bubble
                     if (hasRoutes && !isUser)
                       InlineChatRouteCards(routes: message.routes!),
+                    // Inline booking ticket with QR code
+                    if (message.booking != null && !isUser)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: BookingSummaryCard(
+                          booking: message.booking!,
+                          compact: true,
+                        ),
+                      ),
                   ],
                 ),
               ),

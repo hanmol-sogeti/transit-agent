@@ -52,6 +52,7 @@ final mcpClientProvider = Provider<McpClient>(
     trafiklab: ref.watch(trafiklabServiceProvider),
     location: ref.watch(locationServiceProvider),
     booking: ref.watch(bookingServiceProvider),
+    onBooking: (b) => ref.read(bookingListProvider.notifier).add(b),
   ),
 );
 
@@ -248,10 +249,23 @@ final mapProvider = NotifierProvider<MapNotifier, MapState>(MapNotifier.new);
 
 // ─── Boknings-state provider ─────────────────────────────────────────────────
 
-final bookingListProvider = Provider<List<Booking>>(
-  (ref) => ref.watch(bookingServiceProvider).sessionBookings,
-);
+class BookingListNotifier extends Notifier<List<Booking>> {
+  @override
+  List<Booking> build() => [];
+
+  void add(Booking booking) => state = [...state, booking];
+
+  void replaceByReference(String reference, Booking updated) {
+    state = [for (final b in state) b.reference == reference ? updated : b];
+  }
+}
+
+final bookingListProvider =
+    NotifierProvider<BookingListNotifier, List<Booking>>(BookingListNotifier.new);
 
 final latestBookingProvider = Provider<Booking?>(
-  (ref) => ref.watch(bookingServiceProvider).latestBooking,
+  (ref) {
+    final list = ref.watch(bookingListProvider);
+    return list.isNotEmpty ? list.last : null;
+  },
 );

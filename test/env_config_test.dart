@@ -25,8 +25,8 @@ void main() {
   });
 
   group('EnvConfig.requiredVarNames', () {
-    test('innehåller Trafiklab-nyckeln', () {
-      expect(EnvConfig.requiredVarNames, contains('TRAFIKLAB_KEY'));
+    test('innehåller ResRobot-nyckeln', () {
+      expect(EnvConfig.requiredVarNames, contains('RESEROBOT_KEY'));
     });
 
     test('innehåller alla Azure OpenAI-variabler', () {
@@ -94,8 +94,8 @@ void main() {
       expect(EnvConfig.envFilePath, endsWith('.env'));
     });
 
-    test('contains transit-ai', () {
-      expect(EnvConfig.envFilePath, contains('transit-ai'));
+    test('är en relativ sökväg till lokal .env-fil', () {
+      expect(EnvConfig.envFilePath, equals('.env'));
     });
   });
 }

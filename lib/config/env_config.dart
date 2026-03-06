@@ -10,13 +10,13 @@ import 'package:logging/logging.dart';
 
 final _log = Logger('EnvConfig');
 
-/// Sökväg till env-filen.
-const _envFilePath = r'C:\Users\hmoller\source\env\transit-ai.env';
+/// Sökväg till env-filen (lokal .env i projektroten).
+const _envFilePath = '.env';
 
 /// Alla obligatoriska variabelnamn (måste finnas i env-filen).
 const _requiredVars = <String>[
-  // Trafiklab
-  'TRAFIKLAB_KEY',
+  // ResRobot (UUID-format nyckel för ResRobot v2.1)
+  'RESEROBOT_KEY',
   // Azure OpenAI
   'AZURE_OPENAI_ENDPOINT',
   'AZURE_OPENAI_API_KEY',
@@ -26,6 +26,7 @@ const _requiredVars = <String>[
 
 /// Variabler som innehåller känsliga värden – loggas ALDRIG.
 const _secretVars = <String>{
+  'RESEROBOT_KEY',
   'TRAFIKLAB_KEY',
   'AZURE_OPENAI_API_KEY',
 };
@@ -45,12 +46,14 @@ class EnvConfig {
 
   late final DotEnv _env;
 
-  // ─── Trafiklab ──────────────────────────────────────────────────────────────
-  /// Samma nyckel används för alla ResRobot-endpoints.
-  String get trafiklabKey => _require('TRAFIKLAB_KEY');
-  String get trafiklabRealtimeKey => trafiklabKey;
-  String get trafiklabStopsKey => trafiklabKey;
-  String get trafiklabRouteKey => trafiklabKey;
+  // ─── Trafiklab / ResRobot ───────────────────────────────────────────────────
+  /// UUID-format nyckel för ResRobot v2.1 (alla endpoints).
+  String get reserobotKey => _require('RESEROBOT_KEY');
+  // Aliases used throughout the codebase.
+  String get trafiklabKey => reserobotKey;
+  String get trafiklabRealtimeKey => reserobotKey;
+  String get trafiklabStopsKey => reserobotKey;
+  String get trafiklabRouteKey => reserobotKey;
 
   // ─── Azure OpenAI ───────────────────────────────────────────────────────────
   String get azureOpenAiEndpoint => _require('AZURE_OPENAI_ENDPOINT');

@@ -86,10 +86,11 @@ class ChatNotifier extends Notifier<List<ChatMessage>> {
       });
       state = List<ChatMessage>.from(client.history);
     } catch (e) {
+      final msg = e is OpenAiException ? e.message : e.toString();
       final errorMsg = ChatMessage(
         id: 'error_${DateTime.now().millisecondsSinceEpoch}',
         role: ChatRole.assistant,
-        content: 'Något gick fel. Försök igen.',
+        content: msg,
         timestamp: DateTime.now(),
         errorMessage: e.toString(),
       );

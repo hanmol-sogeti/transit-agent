@@ -139,9 +139,12 @@ class TrafiklabService {
 
   TransitRoute _parseTrip(dynamic tripData, int index) {
     final legs = <Leg>[];
-    final legList = (tripData['LegList'] as Map<String, dynamic>?)?['Leg']
-            as List<dynamic>? ??
-        [];
+    // ResRobot v2.1: 'Leg' is a List for multi-leg trips, a single Map for
+    // single-leg trips. Normalise to List regardless.
+    final legRaw = (tripData['LegList'] as Map<String, dynamic>?)?['Leg'];
+    final legList = legRaw is List
+        ? legRaw
+        : (legRaw != null ? <dynamic>[legRaw] : <dynamic>[]);
     for (final leg in legList) {
       final parsed = _parseLeg(leg as Map<String, dynamic>);
       if (parsed != null) legs.add(parsed);
@@ -237,10 +240,10 @@ class TrafiklabService {
   RealtimeDeparture? _parseDeparture(dynamic data) {
     try {
       final dm = data as Map<String, dynamic>;
-      final stopData = dm['stop'] as Map<String, dynamic>? ?? {};
+      // ResRobot v2.1: 'stop' is a plain string (stop name), id is 'stopExtId'.
       final stop = Stop(
-        id: stopData['extId']?.toString() ?? dm['stopExtId']?.toString() ?? '',
-        name: stopData['name']?.toString() ?? dm['stop']?.toString() ?? '',
+        id: dm['stopExtId']?.toString() ?? '',
+        name: dm['stop']?.toString() ?? '',
         position: const LatLng(0, 0),
       );
       final dateStr = '${dm['date']} ${dm['time']}'.replaceAll(' ', 'T');
@@ -326,7 +329,35 @@ class TrafiklabService {
             .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
-          return jsonDecode(response.body) as Map<String, dynamic>;
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          // ResRobot can return HTTP 200 but with an errorCode in the body.
+          final errorCode = decoded['errorCode']?.toString();
+          if (errorCode != null) {
+            final errorText = decoded['errorText']?.toString() ?? errorCode;
+            if (errorCode == 'API_AUTH') {
+              throw TrafiklabAuthException(
+                'Åtkomst nekad av Trafiklab. '
+                'Kontrollera att API-nyckeln är prenumererad på ResRobot-produkterna '
+                'på trafiklab.se/api. Detalj: $errorText',
+              );
+            }
+            throw TrafiklabException('Trafiklab-fel ($errorCode): $errorText');
+          }
+          return decoded;
+        }
+        // Try to extract the API error message from the JSON body.
+        String? apiError;
+        try {
+          final errBody = jsonDecode(response.body) as Map<String, dynamic>;
+          apiError = errBody['errorText']?.toString();
+        } catch (_) {}
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          throw TrafiklabAuthException(
+            'Åtkomst nekad av Trafiklab (${response.statusCode}). '
+            'Kontrollera att API-nyckeln är prenumererad på ResRobot-produkterna '
+            'på trafiklab.se/api.'
+            '${apiError != null ? ' Detalj: $apiError' : ''}',
+          );
         }
         if (response.statusCode == 429) {
           // Rate limit – vänta och försök igen
@@ -341,8 +372,11 @@ class TrafiklabService {
             'Trafiklab svarar för långsamt just nu (rate limit). Försök igen om ett ögonblick.',
           );
         }
+        // ResRobot returns 200 with an error body for auth issues in some
+        // versions; detect the errorCode field.
         throw TrafiklabException(
-          'Trafiklab returnerade statuskod ${response.statusCode}.',
+          'Trafiklab returnerade statuskod ${response.statusCode}.'
+          '${apiError != null ? ' Detalj: $apiError' : ''}',
         );
       } on TrafiklabException {
         rethrow;
@@ -368,4 +402,13 @@ class TrafiklabException implements Exception {
 
   @override
   String toString() => 'TrafiklabException: $message';
+}
+
+/// Thrown when the API key lacks access to a Trafiklab product.
+/// Instructs the user to subscribe the key on trafiklab.se/api.
+class TrafiklabAuthException extends TrafiklabException {
+  const TrafiklabAuthException(super.message);
+
+  @override
+  String toString() => 'TrafiklabAuthException: $message';
 }

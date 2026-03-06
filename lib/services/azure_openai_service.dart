@@ -37,6 +37,9 @@ class AzureOpenAiService {
   // ─── Chat completion med funktion-anrop ──────────────────────────────────
 
   /// Skicka en chatt-förfrågan med valfria verktygs-definitioner.
+  static const _maxRetries = 3;
+  static const _retryBaseDelay = Duration(seconds: 5);
+
   Future<OpenAiResponse> chatCompletion({
     required List<OpenAiMessage> messages,
     List<OpenAiTool> tools = const [],
@@ -59,34 +62,64 @@ class AzureOpenAiService {
       '${tools.length} verktyg.',
     );
 
-    try {
-      final response = await _httpClient
-          .post(
-            _chatEndpoint,
-            headers: _headers,
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 30));
+    for (var attempt = 1; attempt <= _maxRetries; attempt++) {
+      try {
+        final response = await _httpClient
+            .post(
+              _chatEndpoint,
+              headers: _headers,
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 45));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return OpenAiResponse.fromJson(data);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return OpenAiResponse.fromJson(data);
+        }
+
+        if (response.statusCode == 429) {
+          // Respect Retry-After header if present, otherwise use backoff.
+          final retryAfterSec = int.tryParse(
+            response.headers['retry-after'] ?? '',
+          );
+          final delay = retryAfterSec != null
+              ? Duration(seconds: retryAfterSec)
+              : _retryBaseDelay * attempt;
+          _log.warning(
+            'Azure OpenAI rate limit (429) – försök $attempt/$_maxRetries, '
+            'väntar ${delay.inSeconds}s.',
+          );
+          if (attempt < _maxRetries) {
+            await Future.delayed(delay);
+            continue;
+          }
+          throw OpenAiException(
+            'Tjänsten är för tillfället överbelastad (429). '
+            'Försök igen om en stund.',
+          );
+        }
+
+        _log.warning(
+          'Azure OpenAI svarade med statuskod ${response.statusCode}.',
+        );
+        throw OpenAiException(
+          'Azure OpenAI returnerade statuskod ${response.statusCode}. '
+          'Kontrollera konfigurationen.',
+        );
+      } on OpenAiException {
+        rethrow;
+      } catch (e) {
+        if (attempt == _maxRetries) {
+          _log.severe('Kommunikationsfel med Azure OpenAI: $e');
+          throw OpenAiException(
+            'Kunde inte nå Azure OpenAI. Kontrollera nätverket och konfigurationen.',
+          );
+        }
+        _log.warning('Azure OpenAI fel försök $attempt: $e – försöker igen.');
+        await Future.delayed(_retryBaseDelay * attempt);
       }
-      _log.warning(
-        'Azure OpenAI svarade med statuskod ${response.statusCode}.',
-      );
-      throw OpenAiException(
-        'Azure OpenAI returnerade statuskod ${response.statusCode}. '
-        'Kontrollera konfigurationen.',
-      );
-    } on OpenAiException {
-      rethrow;
-    } catch (e) {
-      _log.severe('Kommunikationsfel med Azure OpenAI: $e');
-      throw OpenAiException(
-        'Kunde inte nå Azure OpenAI. Kontrollera nätverket och konfigurationen.',
-      );
     }
+    throw OpenAiException('Okänt fel vid Azure OpenAI-anrop.');
   }
 
   /// Enkel sanitetskontroll – skickar ett litet meddelande på svenska.

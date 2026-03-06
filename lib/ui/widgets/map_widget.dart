@@ -150,50 +150,27 @@ class RouteMapWidget extends ConsumerWidget {
   ) =>
       Marker(
         point: pos,
-        width: 44,
-        height: 80,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Icon(icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(height: 2),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 2,
-                  ),
-                ],
-              ),
-              child: Text(
-                label.length > 16 ? '${label.substring(0, 14)}…' : label,
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
+        width: 36,
+        height: 36,
+        child: Tooltip(
+          message: label,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-              ),
+              ],
+              border: Border.all(color: Colors.white, width: 2),
             ),
-          ],
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
         ),
       );
 

@@ -90,10 +90,7 @@ class ChatBubble extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (message.toolCalls.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                _ToolCallBadges(toolCalls: message.toolCalls),
-              ],              // Suggestion chips — only on last assistant message
+              // Suggestion chips — only on last assistant message
               if (isLast && !isUser && !message.isLoading)
                 SuggestionChipsRow(message: message),            ],
           ),
@@ -174,37 +171,4 @@ class _ErrorContent extends StatelessWidget {
   }
 }
 
-class _ToolCallBadges extends StatelessWidget {
-  const _ToolCallBadges({required this.toolCalls});
 
-  final List<McpToolCall> toolCalls;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 4,
-      children: toolCalls
-          .map((t) => Tooltip(
-                message: '${t.durationMs ?? '?'}ms',
-                child: Chip(
-                  avatar: Icon(
-                    t.succeeded
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.error_outline_rounded,
-                    size: 14,
-                    color: t.succeeded
-                        ? AppTheme.successColor
-                        : AppTheme.errorColor,
-                  ),
-                  label: Text(
-                    t.toolName,
-                    style: const TextStyle(fontSize: 10),
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                ),
-              ))
-          .toList(),
-    );
-  }
-}

@@ -1,0 +1,71 @@
+name: transit_agent
+description: "ReseAgenten – LLM-driven kollektivtrafikassistent för Sverige"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Karta & routing
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # Nätverk
+  http: ^1.2.2
+  dio: ^5.7.0
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Lokal lagring & cache
+  shared_preferences: ^2.3.2
+  path_provider: ^2.1.4
+
+  # ENV / konfiguration
+  dotenv: ^4.2.0
+
+  # Serialisering
+  json_annotation: ^4.9.0
+  freezed_annotation: ^2.4.4
+
+  # Plats (GPS)
+  geolocator: ^13.0.2
+
+  # Loggning
+  logging: ^1.2.0
+
+  # UI / UX
+  shimmer: ^3.0.0
+  flutter_markdown: ^0.7.4
+  intl: ^0.20.2
+  url_launcher: ^6.3.1
+  package_info_plus: ^8.1.2
+  window_manager: ^0.4.3
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  gap: ^3.0.1
+  timeago: ^3.7.0
+  collection: ^1.18.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.13
+  json_serializable: ^6.8.0
+  freezed: ^2.5.7
+  riverpod_generator: ^2.4.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/

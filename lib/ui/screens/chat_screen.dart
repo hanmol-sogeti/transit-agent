@@ -460,12 +460,15 @@ class _LegDetailsPanel extends ConsumerWidget {
                             ),
                             const SizedBox(width: 4),
                             if (leg.line != null)
-                              Text(
-                                leg.line!,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: color,
+                              Flexible(
+                                child: Text(
+                                  leg.line!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: color,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             if (leg.delayMinutes > 0) ...[
